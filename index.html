@@ -14,7 +14,6 @@
     
     <style>
         body { margin: 0; overflow: hidden; touch-action: none; }
-        /* Custom cursor logic if needed, but we use standard cursor for now */
     </style>
 </head>
 <body>
@@ -23,7 +22,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, useCallback } = React;
 
-        // --- ICONS COMPONENTS (Replaced Lucide for portability) ---
+        // --- ICONS COMPONENTS ---
         const IconWrapper = ({ children, className }) => (
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                 {children}
@@ -59,7 +58,6 @@
             const MOISTURE_DECAY = 0.02; 
             const MOISTURE_REGEN = 30;   
             
-            // Funny Content - SLOW SPEEDS
             const GOOD_ITEMS = [
                 { type: 'salary', icon: '💰', text: '+Lương', value: 100, speed: 0.5 },
                 { type: 'tea', icon: '🧋', text: '+Trà Sữa', value: 50, speed: 0.6 },
@@ -74,10 +72,8 @@
                 { type: 'drama', icon: '🎭', text: 'Drama', damage: 10, speed: 0.9 },
             ];
 
-            // Helper: Random Range
             const random = (min, max) => Math.random() * (max - min) + min;
 
-            // Initialize/Reset Game
             const startGame = () => {
                 setIsPlaying(true);
                 setGameOver(false);
@@ -90,29 +86,30 @@
                 playerRef.current = { x: window.innerWidth / 2, y: window.innerHeight / 2, size: 40 };
             };
 
-            // Handle Mouse Move
             const handleMouseMove = (e) => {
                 if (!isPlaying || bossMode) return;
-                const rect = canvasRef.current.getBoundingClientRect();
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const rect = canvas.getBoundingClientRect();
                 playerRef.current.x = e.clientX - rect.left;
                 playerRef.current.y = e.clientY - rect.top;
             };
 
-            // Handle Touch Move
             const handleTouchMove = (e) => {
                 if (!isPlaying || bossMode) return;
+                const canvas = canvasRef.current;
+                if (!canvas) return;
                 const touch = e.touches[0];
-                const rect = canvasRef.current.getBoundingClientRect();
+                const rect = canvas.getBoundingClientRect();
                 playerRef.current.x = touch.clientX - rect.left;
                 playerRef.current.y = touch.clientY - rect.top;
             }
 
-            // Blink Mechanism (Spacebar)
             const handleKeyDown = useCallback((e) => {
                 if (e.code === 'Space' && isPlaying && !bossMode) {
-                setEyeMoisture(prev => Math.min(prev + MOISTURE_REGEN, 100));
-                createParticles(playerRef.current.x, playerRef.current.y, '💧', 5);
-                setMessage("Mắt mát quá ~");
+                    setEyeMoisture(prev => Math.min(prev + MOISTURE_REGEN, 100));
+                    createParticles(playerRef.current.x, playerRef.current.y, '💧', 5);
+                    setMessage("Mắt mát quá ~");
                 }
                 if (e.key === 'b' || e.key === 'B') {
                     toggleBossMode();
@@ -124,10 +121,9 @@
                 return () => window.removeEventListener('keydown', handleKeyDown);
             }, [handleKeyDown]);
 
-            // Toggle Boss Mode
             const toggleBossMode = () => {
                 setBossMode(prev => !prev);
-                if (!bossMode) {
+                if (!bossMode) { // Logic đảo ngược vì state update async, đây là khi bật boss mode
                     document.title = "Báo cáo tài chính Q4 - Excel";
                 } else {
                     document.title = "Đại Chiến Mắt Cá Vàng";
@@ -147,34 +143,35 @@
 
             const spawnItem = () => {
                 if (Math.random() < 0.015) { 
-                const isBad = Math.random() > 0.8; 
-                const template = isBad 
-                    ? BAD_ITEMS[Math.floor(Math.random() * BAD_ITEMS.length)]
-                    : GOOD_ITEMS[Math.floor(Math.random() * GOOD_ITEMS.length)];
-                
-                const side = Math.floor(Math.random() * 4);
-                let x, y;
-                const w = canvasRef.current.width;
-                const h = canvasRef.current.height;
+                    const isBad = Math.random() > 0.8; 
+                    const template = isBad 
+                        ? BAD_ITEMS[Math.floor(Math.random() * BAD_ITEMS.length)]
+                        : GOOD_ITEMS[Math.floor(Math.random() * GOOD_ITEMS.length)];
+                    
+                    const side = Math.floor(Math.random() * 4);
+                    let x, y;
+                    if(!canvasRef.current) return;
+                    const w = canvasRef.current.width;
+                    const h = canvasRef.current.height;
 
-                switch(side) {
-                    case 0: x = random(0, w); y = -50; break;
-                    case 1: x = w + 50; y = random(0, h); break;
-                    case 2: x = random(0, w); y = h + 50; break;
-                    case 3: x = -50; y = random(0, h); break;
-                    default: x=0; y=0;
-                }
+                    switch(side) {
+                        case 0: x = random(0, w); y = -50; break;
+                        case 1: x = w + 50; y = random(0, h); break;
+                        case 2: x = random(0, w); y = h + 50; break;
+                        case 3: x = -50; y = random(0, h); break;
+                        default: x=0; y=0;
+                    }
 
-                const angle = Math.atan2((h/2) - y, (w/2) - x) + random(-0.5, 0.5);
-                
-                itemsRef.current.push({
-                    ...template,
-                    x, y,
-                    vx: Math.cos(angle) * (template.speed),
-                    vy: Math.sin(angle) * (template.speed),
-                    id: Math.random(),
-                    isBad
-                });
+                    const angle = Math.atan2((h/2) - y, (w/2) - x) + random(-0.5, 0.5);
+                    
+                    itemsRef.current.push({
+                        ...template,
+                        x, y,
+                        vx: Math.cos(angle) * (template.speed),
+                        vy: Math.sin(angle) * (template.speed),
+                        id: Math.random(),
+                        isBad
+                    });
                 }
             };
 
@@ -273,55 +270,11 @@
 
             const blurAmount = eyeMoisture < 30 ? (30 - eyeMoisture) / 5 : 0;
 
-            if (bossMode) {
-                return (
-                    <div className="w-full h-screen bg-white font-mono text-xs overflow-hidden" onClick={toggleBossMode}>
-                        <div className="bg-[#217346] text-white p-2 flex justify-between items-center">
-                            <span>Báo cáo_Tài_chính_2024_Final_V3_Chot.xlsx - Excel</span>
-                            <div className="flex gap-2">
-                                <span className="cursor-pointer hover:bg-green-700 px-2">-</span>
-                                <span className="cursor-pointer hover:bg-green-700 px-2">❐</span>
-                                <span className="cursor-pointer hover:bg-red-500 px-2">×</span>
-                            </div>
-                        </div>
-                        <div className="bg-gray-100 border-b border-gray-300 p-1 flex gap-4 text-gray-700">
-                            <span>File</span><span>Home</span><span>Insert</span><span>Page Layout</span><span className="font-bold underline">Formulas</span><span>Data</span>
-                        </div>
-                        <div className="w-full h-full overflow-auto">
-                            <table className="w-full border-collapse">
-                                <thead>
-                                <tr className="bg-gray-200">
-                                    <th className="border border-gray-300 w-10"></th>
-                                    {['A', 'B', 'C', 'D', 'E', 'F', 'G'].map(c => (
-                                    <th key={c} className="border border-gray-300 px-4 py-1 font-normal text-gray-600">{c}</th>
-                                    ))}
-                                </tr>
-                                </thead>
-                                <tbody>
-                                {[...Array(30)].map((_, r) => (
-                                    <tr key={r}>
-                                    <td className="bg-gray-100 border border-gray-300 text-center text-gray-500">{r + 1}</td>
-                                    {[...Array(7)].map((_, c) => (
-                                        <td key={c} className="border border-gray-300 px-2 py-1 text-right text-gray-800">
-                                        {c === 2 && r > 0 ? (Math.random() * 1000000).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",") : ''}
-                                        {c === 1 && r > 0 ? `Chi phí ${r}` : ''}
-                                        {c === 0 && r === 0 ? "STT" : (c===1 && r===0 ? "Hạng Mục" : (c===2 && r===0 ? "Số Tiền (VND)" : ""))}
-                                        </td>
-                                    ))}
-                                    </tr>
-                                ))}
-                                </tbody>
-                            </table>
-                        </div>
-                        <div className="absolute bottom-5 right-5 bg-yellow-100 p-2 border border-yellow-400 rounded shadow-lg animate-bounce text-sm text-yellow-800">
-                            💡 Mẹo: Sếp đi chưa? Click bất kỳ đâu để quay lại game!
-                        </div>
-                    </div>
-                );
-            }
+            // Xử lý Class cho con trỏ chuột: Chỉ ẩn khi ĐANG CHƠI và KHÔNG PHẢI BOSS MODE
+            const cursorClass = (isPlaying && !bossMode) ? "cursor-none" : "cursor-default";
 
             return (
-                <div className="w-full h-screen bg-lime-50 overflow-hidden relative font-sans cursor-none select-none">
+                <div className={`w-full h-screen bg-lime-50 overflow-hidden relative font-sans select-none ${cursorClass}`}>
                     <div className="absolute inset-0 opacity-10 pointer-events-none" 
                         style={{backgroundImage: 'radial-gradient(#65a30d 1px, transparent 1px)', backgroundSize: '40px 40px'}}>
                     </div>
@@ -334,6 +287,7 @@
                         style={{ filter: `blur(${blurAmount}px)` }}
                     />
 
+                    {/* UI Overlay */}
                     <div className="absolute top-0 left-0 w-full p-4 z-20 pointer-events-none flex justify-between items-start">
                         <div className="bg-white/80 backdrop-blur-sm p-4 rounded-2xl shadow-lg border border-lime-200 flex flex-col sm:flex-row gap-2 items-center">
                             <div className="flex items-center gap-2 text-2xl font-bold text-lime-800">
@@ -446,6 +400,52 @@
                             <RefreshCwIcon className="w-5 h-5" /> CHILL LẠI NÀO
                             </button>
                         </div>
+                        </div>
+                    )}
+                    
+                    {/* BOSS MODE OVERLAY - Đè lên trên thay vì replace */}
+                    {bossMode && (
+                        <div className="absolute inset-0 z-50 bg-white font-mono text-xs overflow-hidden cursor-default" onClick={toggleBossMode}>
+                            <div className="bg-[#217346] text-white p-2 flex justify-between items-center">
+                                <span>Báo cáo_Tài_chính_2024_Final_V3_Chot.xlsx - Excel</span>
+                                <div className="flex gap-2">
+                                    <span className="cursor-pointer hover:bg-green-700 px-2">-</span>
+                                    <span className="cursor-pointer hover:bg-green-700 px-2">❐</span>
+                                    <span className="cursor-pointer hover:bg-red-500 px-2">×</span>
+                                </div>
+                            </div>
+                            <div className="bg-gray-100 border-b border-gray-300 p-1 flex gap-4 text-gray-700">
+                                <span>File</span><span>Home</span><span>Insert</span><span>Page Layout</span><span className="font-bold underline">Formulas</span><span>Data</span>
+                            </div>
+                            <div className="w-full h-full overflow-auto">
+                                <table className="w-full border-collapse">
+                                    <thead>
+                                    <tr className="bg-gray-200">
+                                        <th className="border border-gray-300 w-10"></th>
+                                        {['A', 'B', 'C', 'D', 'E', 'F', 'G'].map(c => (
+                                        <th key={c} className="border border-gray-300 px-4 py-1 font-normal text-gray-600">{c}</th>
+                                        ))}
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    {[...Array(30)].map((_, r) => (
+                                        <tr key={r}>
+                                        <td className="bg-gray-100 border border-gray-300 text-center text-gray-500">{r + 1}</td>
+                                        {[...Array(7)].map((_, c) => (
+                                            <td key={c} className="border border-gray-300 px-2 py-1 text-right text-gray-800">
+                                            {c === 2 && r > 0 ? (Math.random() * 1000000).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",") : ''}
+                                            {c === 1 && r > 0 ? `Chi phí ${r}` : ''}
+                                            {c === 0 && r === 0 ? "STT" : (c===1 && r===0 ? "Hạng Mục" : (c===2 && r===0 ? "Số Tiền (VND)" : ""))}
+                                            </td>
+                                        ))}
+                                        </tr>
+                                    ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div className="absolute bottom-5 right-5 bg-yellow-100 p-2 border border-yellow-400 rounded shadow-lg animate-bounce text-sm text-yellow-800">
+                                💡 Mẹo: Sếp đi chưa? Click bất kỳ đâu để quay lại game!
+                            </div>
                         </div>
                     )}
                 </div>
