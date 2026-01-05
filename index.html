@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Đại Chiến Mắt Cá Vàng</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        body { margin: 0; overflow: hidden; touch-action: none; }
+        /* Custom cursor logic if needed, but we use standard cursor for now */
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        // --- ICONS COMPONENTS (Replaced Lucide for portability) ---
+        const IconWrapper = ({ children, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {children}
+            </svg>
+        );
+
+        const PlayIcon = (props) => <IconWrapper {...props}><polygon points="5 3 19 12 5 21 5 3"></polygon></IconWrapper>;
+        const RefreshCwIcon = (props) => <IconWrapper {...props}><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path><path d="M16 21h5v-5"></path></IconWrapper>;
+        const BriefcaseIcon = (props) => <IconWrapper {...props}><rect width="20" height="14" x="2" y="7" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></IconWrapper>;
+        const DollarSignIcon = (props) => <IconWrapper {...props}><line x1="12" x2="12" y1="2" y2="22"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></IconWrapper>;
+        const FrownIcon = (props) => <IconWrapper {...props}><circle cx="12" cy="12" r="10"></circle><path d="M16 16s-1.5-2-4-2-4 2-4 2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></IconWrapper>;
+        const EyeIcon = (props) => <IconWrapper {...props}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></IconWrapper>;
+
+        // --- MAIN GAME COMPONENT ---
+        const OfficeEyeGame = () => {
+            // Game State
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [gameOver, setGameOver] = useState(false);
+            const [score, setScore] = useState(0);
+            const [bossMode, setBossMode] = useState(false);
+            const [message, setMessage] = useState("Thư giãn đôi mắt, di chuột nhẹ nhàng...");
+            const [eyeMoisture, setEyeMoisture] = useState(100); 
+            const [level, setLevel] = useState(1);
+
+            // Canvas Refs
+            const canvasRef = useRef(null);
+            const requestRef = useRef();
+            const playerRef = useRef({ x: window.innerWidth / 2, y: window.innerHeight / 2, size: 40 });
+            const itemsRef = useRef([]);
+            const particlesRef = useRef([]);
+
+            // Constants - CHILL MODE TUNING
+            const MOISTURE_DECAY = 0.02; 
+            const MOISTURE_REGEN = 30;   
+            
+            // Funny Content - SLOW SPEEDS
+            const GOOD_ITEMS = [
+                { type: 'salary', icon: '💰', text: '+Lương', value: 100, speed: 0.5 },
+                { type: 'tea', icon: '🧋', text: '+Trà Sữa', value: 50, speed: 0.6 },
+                { type: 'sleep', icon: '🛌', text: '+Ngủ Trưa', value: 30, speed: 0.5 },
+                { type: 'crush', icon: '🥰', text: '+Crush', value: 200, speed: 0.7 },
+            ];
+
+            const BAD_ITEMS = [
+                { type: 'deadline', icon: '🔥', text: 'DEADLINE!', damage: 20, speed: 0.8 },
+                { type: 'bug', icon: '🐛', text: 'Bug Logic', damage: 15, speed: 0.7 },
+                { type: 'meeting', icon: '📢', text: 'Họp gấp', damage: 25, speed: 0.6 },
+                { type: 'drama', icon: '🎭', text: 'Drama', damage: 10, speed: 0.9 },
+            ];
+
+            // Helper: Random Range
+            const random = (min, max) => Math.random() * (max - min) + min;
+
+            // Initialize/Reset Game
+            const startGame = () => {
+                setIsPlaying(true);
+                setGameOver(false);
+                setScore(0);
+                setEyeMoisture(100);
+                setLevel(1);
+                setMessage("Hít thở sâu... và thư giãn...");
+                itemsRef.current = [];
+                particlesRef.current = [];
+                playerRef.current = { x: window.innerWidth / 2, y: window.innerHeight / 2, size: 40 };
+            };
+
+            // Handle Mouse Move
+            const handleMouseMove = (e) => {
+                if (!isPlaying || bossMode) return;
+                const rect = canvasRef.current.getBoundingClientRect();
+                playerRef.current.x = e.clientX - rect.left;
+                playerRef.current.y = e.clientY - rect.top;
+            };
+
+            // Handle Touch Move
+            const handleTouchMove = (e) => {
+                if (!isPlaying || bossMode) return;
+                const touch = e.touches[0];
+                const rect = canvasRef.current.getBoundingClientRect();
+                playerRef.current.x = touch.clientX - rect.left;
+                playerRef.current.y = touch.clientY - rect.top;
+            }
+
+            // Blink Mechanism (Spacebar)
+            const handleKeyDown = useCallback((e) => {
+                if (e.code === 'Space' && isPlaying && !bossMode) {
+                setEyeMoisture(prev => Math.min(prev + MOISTURE_REGEN, 100));
+                createParticles(playerRef.current.x, playerRef.current.y, '💧', 5);
+                setMessage("Mắt mát quá ~");
+                }
+                if (e.key === 'b' || e.key === 'B') {
+                    toggleBossMode();
+                }
+            }, [isPlaying, bossMode]);
+
+            useEffect(() => {
+                window.addEventListener('keydown', handleKeyDown);
+                return () => window.removeEventListener('keydown', handleKeyDown);
+            }, [handleKeyDown]);
+
+            // Toggle Boss Mode
+            const toggleBossMode = () => {
+                setBossMode(prev => !prev);
+                if (!bossMode) {
+                    document.title = "Báo cáo tài chính Q4 - Excel";
+                } else {
+                    document.title = "Đại Chiến Mắt Cá Vàng";
+                }
+            };
+
+            const createParticles = (x, y, text, count = 1) => {
+                for (let i = 0; i < count; i++) {
+                particlesRef.current.push({
+                    x, y, text,
+                    vx: random(-1, 1),
+                    vy: random(-1, -3),
+                    life: 1.0,
+                });
+                }
+            };
+
+            const spawnItem = () => {
+                if (Math.random() < 0.015) { 
+                const isBad = Math.random() > 0.8; 
+                const template = isBad 
+                    ? BAD_ITEMS[Math.floor(Math.random() * BAD_ITEMS.length)]
+                    : GOOD_ITEMS[Math.floor(Math.random() * GOOD_ITEMS.length)];
+                
+                const side = Math.floor(Math.random() * 4);
+                let x, y;
+                const w = canvasRef.current.width;
+                const h = canvasRef.current.height;
+
+                switch(side) {
+                    case 0: x = random(0, w); y = -50; break;
+                    case 1: x = w + 50; y = random(0, h); break;
+                    case 2: x = random(0, w); y = h + 50; break;
+                    case 3: x = -50; y = random(0, h); break;
+                    default: x=0; y=0;
+                }
+
+                const angle = Math.atan2((h/2) - y, (w/2) - x) + random(-0.5, 0.5);
+                
+                itemsRef.current.push({
+                    ...template,
+                    x, y,
+                    vx: Math.cos(angle) * (template.speed),
+                    vy: Math.sin(angle) * (template.speed),
+                    id: Math.random(),
+                    isBad
+                });
+                }
+            };
+
+            const update = () => {
+                if (!isPlaying || bossMode) return;
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                setEyeMoisture(prev => {
+                    const newVal = prev - MOISTURE_DECAY;
+                    if (newVal <= 0) {
+                        setGameOver(true);
+                        setIsPlaying(false);
+                        setMessage("Thua vì quên chớp mắt! Nhớ bấm SPACE nha!");
+                        return 0;
+                    }
+                    return newVal;
+                });
+
+                const { x, y } = playerRef.current;
+                ctx.font = "40px Arial";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                const playerEmoji = eyeMoisture < 30 ? '😵' : (eyeMoisture < 60 ? '😑' : '🤩');
+                ctx.fillText(playerEmoji, x, y);
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 30, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(59, 130, 246, 0.3)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                spawnItem();
+
+                itemsRef.current.forEach((item, index) => {
+                    item.x += item.vx;
+                    item.y += item.vy;
+                    ctx.font = "30px Arial";
+                    ctx.fillText(item.icon, item.x, item.y);
+                    const dist = Math.hypot(item.x - x, item.y - y);
+                    if (dist < 40) {
+                        itemsRef.current.splice(index, 1);
+                        if (item.isBad) {
+                            setScore(s => Math.max(0, s - item.damage));
+                            createParticles(x, y, item.text, 1);
+                            setEyeMoisture(m => Math.max(0, m - 10));
+                            setMessage(`Ối! Dính ${item.text}`);
+                        } else {
+                            setScore(s => s + item.value);
+                            createParticles(x, y, item.text, 1);
+                            setMessage(`Chill... ${item.text}`);
+                        }
+                    }
+                    if (item.x < -100 || item.x > canvas.width + 100 || item.y < -100 || item.y > canvas.height + 100) {
+                        itemsRef.current.splice(index, 1);
+                    }
+                });
+
+                particlesRef.current.forEach((p, i) => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.life -= 0.01;
+                    ctx.globalAlpha = p.life;
+                    ctx.font = "16px Arial";
+                    ctx.fillStyle = "#15803d";
+                    ctx.fillText(p.text, p.x, p.y);
+                    ctx.globalAlpha = 1.0;
+                    if (p.life <= 0) particlesRef.current.splice(i, 1);
+                });
+
+                if (score > level * 1000) setLevel(l => l + 1);
+                requestRef.current = requestAnimationFrame(update);
+            };
+
+            useEffect(() => {
+                if (isPlaying && !bossMode && !gameOver) {
+                    requestRef.current = requestAnimationFrame(update);
+                }
+                return () => cancelAnimationFrame(requestRef.current);
+            }, [isPlaying, bossMode, gameOver, eyeMoisture, level, score]);
+
+            useEffect(() => {
+                const handleResize = () => {
+                    if (canvasRef.current) {
+                        canvasRef.current.width = window.innerWidth;
+                        canvasRef.current.height = window.innerHeight;
+                    }
+                };
+                window.addEventListener('resize', handleResize);
+                handleResize();
+                return () => window.removeEventListener('resize', handleResize);
+            }, []);
+
+            const blurAmount = eyeMoisture < 30 ? (30 - eyeMoisture) / 5 : 0;
+
+            if (bossMode) {
+                return (
+                    <div className="w-full h-screen bg-white font-mono text-xs overflow-hidden" onClick={toggleBossMode}>
+                        <div className="bg-[#217346] text-white p-2 flex justify-between items-center">
+                            <span>Báo cáo_Tài_chính_2024_Final_V3_Chot.xlsx - Excel</span>
+                            <div className="flex gap-2">
+                                <span className="cursor-pointer hover:bg-green-700 px-2">-</span>
+                                <span className="cursor-pointer hover:bg-green-700 px-2">❐</span>
+                                <span className="cursor-pointer hover:bg-red-500 px-2">×</span>
+                            </div>
+                        </div>
+                        <div className="bg-gray-100 border-b border-gray-300 p-1 flex gap-4 text-gray-700">
+                            <span>File</span><span>Home</span><span>Insert</span><span>Page Layout</span><span className="font-bold underline">Formulas</span><span>Data</span>
+                        </div>
+                        <div className="w-full h-full overflow-auto">
+                            <table className="w-full border-collapse">
+                                <thead>
+                                <tr className="bg-gray-200">
+                                    <th className="border border-gray-300 w-10"></th>
+                                    {['A', 'B', 'C', 'D', 'E', 'F', 'G'].map(c => (
+                                    <th key={c} className="border border-gray-300 px-4 py-1 font-normal text-gray-600">{c}</th>
+                                    ))}
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {[...Array(30)].map((_, r) => (
+                                    <tr key={r}>
+                                    <td className="bg-gray-100 border border-gray-300 text-center text-gray-500">{r + 1}</td>
+                                    {[...Array(7)].map((_, c) => (
+                                        <td key={c} className="border border-gray-300 px-2 py-1 text-right text-gray-800">
+                                        {c === 2 && r > 0 ? (Math.random() * 1000000).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",") : ''}
+                                        {c === 1 && r > 0 ? `Chi phí ${r}` : ''}
+                                        {c === 0 && r === 0 ? "STT" : (c===1 && r===0 ? "Hạng Mục" : (c===2 && r===0 ? "Số Tiền (VND)" : ""))}
+                                        </td>
+                                    ))}
+                                    </tr>
+                                ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="absolute bottom-5 right-5 bg-yellow-100 p-2 border border-yellow-400 rounded shadow-lg animate-bounce text-sm text-yellow-800">
+                            💡 Mẹo: Sếp đi chưa? Click bất kỳ đâu để quay lại game!
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="w-full h-screen bg-lime-50 overflow-hidden relative font-sans cursor-none select-none">
+                    <div className="absolute inset-0 opacity-10 pointer-events-none" 
+                        style={{backgroundImage: 'radial-gradient(#65a30d 1px, transparent 1px)', backgroundSize: '40px 40px'}}>
+                    </div>
+
+                    <canvas 
+                        ref={canvasRef}
+                        onMouseMove={handleMouseMove}
+                        onTouchMove={handleTouchMove}
+                        className="absolute inset-0 z-10 block touch-none transition-all duration-1000"
+                        style={{ filter: `blur(${blurAmount}px)` }}
+                    />
+
+                    <div className="absolute top-0 left-0 w-full p-4 z-20 pointer-events-none flex justify-between items-start">
+                        <div className="bg-white/80 backdrop-blur-sm p-4 rounded-2xl shadow-lg border border-lime-200 flex flex-col sm:flex-row gap-2 items-center">
+                            <div className="flex items-center gap-2 text-2xl font-bold text-lime-800">
+                                <DollarSignIcon className="w-6 h-6" />
+                                <span>{score.toLocaleString()} VND</span>
+                            </div>
+                            <div className="hidden sm:block text-lime-600 text-sm font-semibold">| Chế độ: Thư giãn ☕</div>
+                        </div>
+
+                        <div className="bg-white/80 backdrop-blur-sm p-4 rounded-2xl shadow-lg border border-lime-200 w-48 sm:w-64">
+                            <div className="flex justify-between mb-1">
+                                <span className="text-sm font-bold text-blue-600 flex items-center gap-1"><EyeIcon className="w-4 h-4"/> Độ ẩm</span>
+                                <span className="text-xs text-gray-500 font-mono hidden sm:inline">Space để chớp</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden border border-gray-300">
+                                <div 
+                                className={`h-full transition-all duration-300 ${eyeMoisture < 30 ? 'bg-red-500' : 'bg-blue-400'}`} 
+                                style={{ width: `${eyeMoisture}%` }}
+                                ></div>
+                            </div>
+                        </div>
+                        
+                        <div className="pointer-events-auto">
+                            <button 
+                                onClick={toggleBossMode}
+                                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg flex items-center gap-2 transition-transform hover:scale-105 active:scale-95"
+                                title="Phím tắt: B"
+                            >
+                                <BriefcaseIcon className="w-5 h-5"/> <span className="hidden sm:inline">SẾP TỚI! (B)</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {eyeMoisture < 20 && isPlaying && !bossMode && (
+                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex flex-col items-center">
+                            <div className="text-red-500 font-bold text-6xl animate-ping opacity-30 fixed">SPACE!</div>
+                            <div className="bg-white/90 border-4 border-red-500 text-red-600 font-bold text-2xl px-8 py-4 rounded-2xl shadow-2xl animate-bounce whitespace-nowrap z-30">
+                                ⚠️ BẤM SPACE!
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="absolute bottom-4 left-4 pointer-events-none bg-white/70 p-3 rounded-xl backdrop-blur-sm border border-green-200 text-xs text-green-900 shadow-sm z-20 hidden sm:block">
+                        <div className="font-bold mb-1 text-green-700">✅ ĂN (Tốt):</div>
+                        <div className="flex gap-3 text-2xl">
+                        <span title="Lương">💰</span><span title="Trà sữa">🧋</span><span title="Ngủ trưa">🛌</span><span title="Crush">🥰</span>
+                        </div>
+                    </div>
+                    
+                    <div className="absolute bottom-4 right-4 pointer-events-none bg-white/70 p-3 rounded-xl backdrop-blur-sm border border-red-200 text-xs text-red-900 shadow-sm text-right z-20 hidden sm:block">
+                        <div className="font-bold mb-1 text-red-700">❌ NÉ (Xấu):</div>
+                        <div className="flex gap-3 text-2xl justify-end">
+                        <span title="Deadline">🔥</span><span title="Bug">🐛</span><span title="Họp gấp">📢</span><span title="Drama">🎭</span>
+                        </div>
+                    </div>
+
+                    <div className="absolute top-24 left-1/2 transform -translate-x-1/2 z-20 text-center pointer-events-none w-full px-4">
+                        <span className="bg-lime-100/90 text-lime-900 px-6 py-2 rounded-full font-bold shadow-sm border border-lime-300 inline-block">
+                        {message}
+                        </span>
+                    </div>
+
+                    {!isPlaying && !gameOver && (
+                        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-30 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-lg w-full text-center border-4 border-lime-400">
+                            <h1 className="text-4xl font-extrabold text-lime-700 mb-2">MẮT THẦN CÔNG SỞ 👀</h1>
+                            <p className="text-gray-600 mb-6 italic">Phiên bản: Chill Chiều Thứ 6 🍵</p>
+                            
+                            <div className="grid grid-cols-2 gap-4 text-left mb-6 bg-lime-50 p-4 rounded-xl">
+                            <div>
+                                <h3 className="font-bold text-lime-800 mb-2">Nhiệm vụ:</h3>
+                                <ul className="text-sm space-y-2 text-gray-700">
+                                <li>🖱️ <strong>Di chuột/Tay:</strong> Nhẹ nhàng.</li>
+                                <li>✅ <strong>Ngắm:</strong> Tiền & Trà sữa.</li>
+                                <li>⌨️ <strong>Space/Tap:</strong> Chớp mắt.</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-red-800 mb-2">Thư giãn:</h3>
+                                <ul className="text-sm space-y-2 text-gray-700">
+                                <li>🐌 <strong>Tốc độ:</strong> Rất chậm.</li>
+                                <li>😌 <strong>Stress:</strong> 0%.</li>
+                                <li>💼 <strong>Sếp tới:</strong> Phím 'B'.</li>
+                                </ul>
+                            </div>
+                            </div>
+
+                            <button onClick={startGame} className="w-full bg-lime-600 hover:bg-lime-700 text-white text-xl font-bold py-4 rounded-xl shadow-lg transition-transform hover:scale-105 flex justify-center items-center gap-2 pointer-events-auto">
+                            <PlayIcon fill="currentColor" /> THƯ GIÃN THÔI!
+                            </button>
+                        </div>
+                        </div>
+                    )}
+
+                    {gameOver && (
+                        <div className="absolute inset-0 bg-red-900/80 backdrop-blur-md z-30 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full text-center border-4 border-red-400 animate-bounce-short">
+                            <div className="flex justify-center mb-4">
+                            <FrownIcon className="w-16 h-16 text-red-500"/>
+                            </div>
+                            <h2 className="text-3xl font-bold text-gray-800 mb-2">GAME OVER!</h2>
+                            <p className="text-xl text-red-600 font-bold mb-4">Mắt bạn khô quá rồi!</p>
+                            
+                            <div className="bg-gray-100 rounded-lg p-4 mb-6">
+                            <p className="text-gray-600 text-sm">Tổng thu nhập:</p>
+                            <p className="text-3xl font-mono font-bold text-green-600">{score.toLocaleString()} VND</p>
+                            </div>
+
+                            <button onClick={startGame} className="w-full bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold py-3 rounded-xl shadow-lg transition-transform hover:scale-105 flex justify-center items-center gap-2 pointer-events-auto">
+                            <RefreshCwIcon className="w-5 h-5" /> CHILL LẠI NÀO
+                            </button>
+                        </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<OfficeEyeGame />);
+    </script>
+</body>
+</html>
